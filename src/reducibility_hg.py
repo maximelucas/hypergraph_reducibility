@@ -13,10 +13,12 @@ from scipy import linalg
 import xgi
 
 __all__ = [
+    "find_charact_tau",
     "construct_hg_multilayer",
     "density",
     "partition",
     "KL",
+    "penalization",
     "optimization",
     "entropy",
     "compute_information",
@@ -24,8 +26,30 @@ __all__ = [
     "shuffle_hyperedges"
 ]
 
+def find_charact_tau(H, orders, weights, rescale_per_node=False):
+    """
+    Find characteristic timescale tau 
 
-def construct_hg_multilayer(H):
+    Parameters
+    ----------
+    H : xgi Hypergraph
+        Input hypergraph
+    orders : list
+        List of integers representing the orders of the laplacian matrices.
+    weights : list
+        List of float values representing the weights for each order.
+    
+    Returns
+    -------
+    float
+        The value of tau calculated from the eigenvalues of the multi-order laplacian matrix.
+    """
+    L_multi = xgi.multiorder_laplacian(H, orders, weights, rescale_per_node=rescale_per_node)
+    Ls = np.sort(np.linalg.eigvals(L_multi))
+
+    return 1 / Ls[-1]
+
+def construct_hg_multilayer(H, rescale_per_node=False):
     """
     Computes the list of Laplacians and the total Laplacian matrix of a hypergraph H.
 
@@ -42,7 +66,7 @@ def construct_hg_multilayer(H):
     max_d = xgi.max_edge_order(H)
     hg_m = []
     for d in range(1, max_d + 1):
-        L = xgi.laplacian(H, d, rescale_per_node=False)
+        L = xgi.laplacian(H, d, rescale_per_node=rescale_per_node)
         hg_m.append(L)
     N = G.num_nodes
     hg_all = np.zeros((N, N))
@@ -66,8 +90,8 @@ def density(Lap, tau):
     -------
     np.ndarray: the density matrix
     """
-    rho = linalg.expm(-2 * tau * Lap)
-    rho = rho / np.trace(rho) + np.eye(len(rho)) * 10**-15
+    rho = linalg.expm(-tau * Lap)
+    rho = rho / np.trace(rho) + np.eye(len(rho)) * 10**-10
     return rho
 
 
@@ -109,8 +133,26 @@ def KL(rho_emp, rho_model):
         - np.matmul(rho_emp, linalg.logm(rho_model))
     )
 
+def penalization(Lap, tau):
+    """
+    Computes the partition function of a Laplacian with scale `tau`.
 
-def optimization(H, tau):
+    Parameters
+    ----------
+    Lap : np.ndarray
+        The Laplacian matrix
+    tau : float
+        The scale of the Laplacian
+
+    Returns
+    -------
+    float: the partition function
+    """
+    Z = np.trace(linalg.expm(- tau * Lap))
+    N = len(Lap)
+    return np.log(N) - entropy(Lap,tau)
+
+def optimization(H, tau, rescale_per_node=False):
     """
     Computes the gain and loss for modeling a hypergraph (up to order `d_max`),
     using a part of it, up to order `d < d_max`.
@@ -129,23 +171,27 @@ def optimization(H, tau):
     lZ: numpy.ndarray
         The penalization term for model complexity
     """
-    hg_m, hg_all = construct_hg_multilayer(G)
-    rho_all = density(hg_all, tau)
-
-    D = []
-    lZ = []
-    N = G.num_nodes
-    L_l = np.zeros((N, N))
-    for l in range(len(hg_m)):
-        L_l = L_l + hg_m[l]
+    orders = np.array(xgi.unique_edge_sizes(H)) - 1
+    weights = np.ones(len(orders))
+    L_multi = xgi.multiorder_laplacian(H, orders, weights, rescale_per_node=rescale_per_node)
+    
+    rho_all = density(L_multi, tau)
+    
+    D = [] # Learning error
+    lZ = [] # Penalization term for model complexity
+    N = H.num_nodes
+    
+    for l in range(len(orders)):
+        L_l = xgi.multiorder_laplacian(H, orders[0:l+1], weights[0:l+1], rescale_per_node=rescale_per_node)
         rho_l = density(L_l, tau)
-        Z_l = partition(L_l, tau)
+        d = KL(rho_all, rho_l)
+        z = penalization(L_l,tau)
+        
+        D.append(d)   
+        lZ.append(z)
 
-        D.append(KL(rho_all, rho_l))
-        lZ.append(np.log(Z_l))
-
-    lZ = np.array(lZ)  ### Penalization term for model complexity
-    D = np.array(D)  ### Learning error
+    lZ = np.array(lZ)
+    D = np.array(D)
 
     return D, lZ
 
@@ -169,11 +215,12 @@ def entropy(L, tau):
     Ls = np.linalg.eigvals(L)  # Calculate eigenvalues of L
     Z = np.sum(np.exp(-tau * Ls))  # Calculates the partition function
     p = np.exp(-tau * Ls) / Z  # Calculates the probabilities
+    p = np.delete(p,np.where(p<10**-8))
     S = np.sum(-p * np.log(p))  # entropy
     return S
 
 
-def compute_information(H, taus):
+def compute_information(H, tau, rescale_per_node=False):
     """
     Utility function to compute the information of the hypergraph.
 
@@ -193,15 +240,13 @@ def compute_information(H, taus):
     orders: list
         The orders of the hypergraph
     """
-    n_t = len(taus)
-    d_max = xgi.max_edge_order(H)
-    orders = range(1, d_max + 1)
+    orders = np.array(xgi.unique_edge_sizes(H)) - 1
+    d_max=len(orders)
 
-    Ds = np.zeros((n_t, d_max))
-    lZs = np.zeros((n_t, d_max))
-
-    for i, tau in enumerate(tqdm(taus)):
-        Ds[i, :], lZs[i, :] = optimization
+    Ds = np.zeros(d_max)
+    lZs = np.zeros(d_max)
+    
+    Ds, lZs = optimization(H, tau, rescale_per_node=rescale_per_node)
 
     return Ds, lZs, orders
 
