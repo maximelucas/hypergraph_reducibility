@@ -8,7 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
 import seaborn as sb
-from scipy import linalg
+from numpy.linalg import eigvals, eigvalsh
+from scipy.linalg import expm, logm
 
 import xgi
 
@@ -48,7 +49,7 @@ def find_charact_tau(H, orders, weights, rescale_per_node=False):
     L_multi = xgi.multiorder_laplacian(
         H, orders, weights, rescale_per_node=rescale_per_node
     )
-    Ls = np.sort(np.linalg.eigvals(L_multi))
+    Ls = eigvalsh(L_multi)
 
     return 1 / Ls[-1]
 
@@ -94,7 +95,7 @@ def density(Lap, tau):
     -------
     np.ndarray: the density matrix
     """
-    rho = linalg.expm(-tau * Lap)
+    rho = expm(-tau * Lap)
     rho = rho / np.trace(rho) + np.eye(len(rho)) * 10**-10
     return rho
 
@@ -114,7 +115,7 @@ def partition(Lap, tau):
     -------
     float: the partition function
     """
-    return np.trace(linalg.expm(-2 * tau * Lap))
+    return np.trace(expm(-2 * tau * Lap))
 
 
 def KL(rho_emp, rho_model):
@@ -133,8 +134,8 @@ def KL(rho_emp, rho_model):
     float: the KL divergence between `rho_emp` and `rho_model`
     """
     return np.trace(
-        np.matmul(rho_emp, linalg.logm(rho_emp))
-        - np.matmul(rho_emp, linalg.logm(rho_model))
+        np.matmul(rho_emp, logm(rho_emp))
+        - np.matmul(rho_emp, logm(rho_model))
     )
 
 
@@ -153,7 +154,7 @@ def penalization(Lap, tau):
     -------
     float: the partition function
     """
-    Z = np.trace(linalg.expm(-tau * Lap))
+    Z = np.trace(expm(-tau * Lap))
     N = len(Lap)
     return np.log(N) - entropy(Lap, tau)
 
@@ -222,7 +223,7 @@ def entropy(L, tau):
     S: float
         The entropy of the graph
     """
-    Ls = np.linalg.eigvals(L)  # Calculate eigenvalues of L
+    Ls = eigvalsh(L)  # Calculate eigenvalues of L
     Z = np.sum(np.exp(-tau * Ls))  # Calculates the partition function
     p = np.exp(-tau * Ls) / Z  # Calculates the probabilities
     p = np.delete(p, np.where(p < 10**-8))
