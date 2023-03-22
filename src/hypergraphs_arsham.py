@@ -6,7 +6,7 @@ and compute the multiorder Laplacian
 import random
 from itertools import combinations, permutations
 from math import factorial
-from scipy.special import comb 
+from scipy.special import comb
 
 import networkx as nx
 import numpy as np
@@ -177,131 +177,138 @@ def fully_connected_hypergraph(N, d_max):
 
     return sort_hyperedges(hyperedges)
 
-def random_nested_generator(N, d_max, p_max, n_lower, p_swap) :
+
+def random_nested_generator(N, d_max, p_max, n_lower, p_swap):
     """Generates a random hypergraph with maximum order d_max.
-    
+
     The hypergraph is generated as follows:
         1. Create a d_max-hyperedge with probabilty p_max
            for any d_max+1 nodes.
         2. Go down one order to d=d_max-1
-            a. For each d+1 hyperedge, create a d-hyperedge 
+            a. For each d+1 hyperedge, create a d-hyperedge
             for any of its d+1 nodes with probability p_lower
-            b. For each of those d-hyperedges created, 
-            replace each node by an outside node with 
+            b. For each of those d-hyperedges created,
+            replace each node by an outside node with
             probability p_swap.
             c. Start again at 2. until reaching d=1.
     p_swap controls how nested or random the hypergraph is.
-    
+
     Parameters
     ----------
-    N : int 
+    N : int
         Number of nodes
-    d_max : int 
+    d_max : int
         Maximum order of hyperedge in the hypergraph
     p_max : float
         Probability to create a d_max-hyperedge
         from any d_max+1 nodes
     n_lower : float
         Average number of face [(d-1)-hyperedge]
-        per existing d-hyperedge. For any of the d subfaces, 
+        per existing d-hyperedge. For any of the d subfaces,
         the probability to create a hyperedge
         is p_lower = n_lower / d
-    p_swap : float 
+    p_swap : float
         Probability of each node in a hyperedge
         to be replaced by a node not in that hyperedge
         If p_swap=0, then the hypergraph is fully nested
         by construction: each hyperedge is the face of a hyperedge
         of the order above. If p_swap=1, then the hypergraph
-        should be fully random. 
-        
+        should be fully random.
+
     Returns
     -------
     hyperedges : list of list of tuples
-        Each element is a list hyperedges at a given order 
+        Each element is a list hyperedges at a given order
     hyperedges_flat : list of tuples
         List of hyperedges sorted by size (flattened version of 'hyperedges')
     """
-    
-    if p_max < 0 or p_max > 1 : 
+
+    if p_max < 0 or p_max > 1:
         raise ValueError("p_max should be between 0 and 1")
-    if n_lower < 0 or n_lower > d_max : 
-        raise ValueError("n_lower between 0 and d_max so that p_lower is between 0 and 1.")
-    if p_swap < 0 or p_swap > 1 : 
+    if n_lower < 0 or n_lower > d_max:
+        raise ValueError(
+            "n_lower between 0 and d_max so that p_lower is between 0 and 1."
+        )
+    if p_swap < 0 or p_swap > 1:
         raise ValueError("p_swap should be between 0 and 1")
-    
-    nodes = range(N) 
+
+    nodes = range(N)
 
     hyperedges = []
     hyperedges_d = []
 
     # add hyperedges of order d_max with prob p_max
-    for hyperedge in combinations(nodes, d_max+1) : 
-        if random.random() <= p_max : 
+    for hyperedge in combinations(nodes, d_max + 1):
+        if random.random() <= p_max:
             hyperedges_d.append(hyperedge)
 
     hyperedges.append(hyperedges_d)
 
     # now go down in the orders
-    ds = range(d_max-1, 0, -1)
-    for i,d in enumerate(ds) :
+    ds = range(d_max - 1, 0, -1)
+    for i, d in enumerate(ds):
 
         hyperedges_up = hyperedges[i]
         hyperedges_d = []
 
-        for hyperedge_up in hyperedges_up : 
+        for hyperedge_up in hyperedges_up:
 
             # add each face of order d-1 with prob p_lower
-            for hyperedge in combinations(hyperedge_up, d+1) : 
-                
-                p_lower = n_lower / (d+2)
+            for hyperedge in combinations(hyperedge_up, d + 1):
+
+                p_lower = n_lower / (d + 2)
                 if p_lower > 1:
                     raise ValueError("p_lower cannot be >1")
-                    
-                if random.random() <= p_lower : # add d-1 face
+
+                if random.random() <= p_lower:  # add d-1 face
                     # replace each node in hyperedge
                     # by a node outside of it with prob p_swap
-                    valid_add = False 
-                    
-                    if len(hyperedges_d)==comb(N,d+1) : 
-                        raise ValueError(f"All {d}-hyperedges already exist. Not possible to add more.")
-                
-                    while not valid_add : 
+                    valid_add = False
+
+                    if len(hyperedges_d) == comb(N, d + 1):
+                        raise ValueError(
+                            f"All {d}-hyperedges already exist. Not possible to add more."
+                        )
+
+                    while not valid_add:
                         hyperedge_swapped = []
                         nodes_outside = list(set(nodes).difference(hyperedge))
                         # modify hyperedge by replacing nodes
-                        for node in hyperedge : 
-                            if random.random() <= p_swap : # replace
+                        for node in hyperedge:
+                            if random.random() <= p_swap:  # replace
                                 node_new = random.choice(nodes_outside)
-                                nodes_outside.remove(node_new) # avoid twice same node
-                            else : 
+                                nodes_outside.remove(node_new)  # avoid twice same node
+                            else:
                                 node_new = node
                             hyperedge_swapped.append(node_new)
                         hyperedge_swapped = tuple(sorted(hyperedge_swapped))
                         # check that modified hyperedge is valid, i.e.
                         # it does not exist yet. If it does, start over.
-                        if hyperedge_swapped not in hyperedges_d : 
+                        if hyperedge_swapped not in hyperedges_d:
                             valid_add = True
                             hyperedges_d.append(tuple(hyperedge_swapped))
-                        else :
+                        else:
                             pass
-                            if p_swap==0 : # no chance to change, infinite loop
-                                print(f'Hyperedge {hyperedge_swapped} already exists',
-                                      f'not added because p_swap=0')
+                            if p_swap == 0:  # no chance to change, infinite loop
+                                print(
+                                    f"Hyperedge {hyperedge_swapped} already exists",
+                                    f"not added because p_swap=0",
+                                )
                                 break
-                    
-                else : # do not add face
-                    continue 
+
+                else:  # do not add face
+                    continue
 
         hyperedges.append(hyperedges_d)
-        
+
         hyperedges_flat = [he for sublist in hyperedges for he in sublist]
         hyperedges_flat = sort_hyperedges(hyperedges_flat)
-        
-        # make sure there are no duplicates 
+
+        # make sure there are no duplicates
         uni, counts = np.unique(hyperedges_flat, return_counts=True)
-        assert len(uni[counts>1])==0
-    
-    return hyperedges_flat, hyperedges    
+        assert len(uni[counts > 1]) == 0
+
+    return hyperedges_flat, hyperedges
 
 
 # ======================
@@ -388,14 +395,14 @@ def degree_of_order(d, M):
     return K_d
 
 
-def laplacian_of_order(d, N, hyperedges, return_k=False, rescale_per_node=False) :
+def laplacian_of_order(d, N, hyperedges, return_k=False, rescale_per_node=False):
     """Returns the Laplacian matrix of order d
-    
+
     Parameters
     ----------
-    d : int 
-        Order of the adjacency matrix 
-    d_simplices : list of tuples 
+    d : int
+        Order of the adjacency matrix
+    d_simplices : list of tuples
         Sorted list of hyperedges of order d
     rescale_per_node : bool, optional
         If True, divide the Laplacian by d, i.e.
@@ -404,23 +411,23 @@ def laplacian_of_order(d, N, hyperedges, return_k=False, rescale_per_node=False)
     Returns
     -------
     L_d : numpy array
-        Matrix of dim (N, N)        
-    
+        Matrix of dim (N, N)
+
     """
-    
+
     d_hyperedges = hyperedges_of_order(hyperedges, d)
-    
+
     M_d = adj_tensor_of_order(d, N, d_hyperedges)
-    
+
     Adj_d = adj_matrix_of_order(d, M_d)
-    K_d = degree_of_order(d, M_d) 
-    
+    K_d = degree_of_order(d, M_d)
+
     L_d = d * np.diag(K_d) - Adj_d
-    
-    if rescale_per_node : 
+
+    if rescale_per_node:
         L_d /= d
-    
-    if return_k :
+
+    if return_k:
         return L_d, K_d
     else:
         return L_d

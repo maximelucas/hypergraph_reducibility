@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import sys
 
 import numpy as np
@@ -47,27 +48,27 @@ existing_datasets = [
 def plot_message_length_shuffled(Qs_h, orders, d_shuffles, dataset, save=True):
 
     fig, ax = plt.subplots(figsize=(3.4, 2.2))
-        
-    ax.plot(orders, Qs_H[0], "o-", label=f"not shuffled", ms=10, mfc="white")    
+
+    ax.plot(orders, Qs_H[0], "o-", label=f"not shuffled", ms=10, mfc="white")
     ax.axvline(d_shuffles[0], ls="--", c=f"C0", zorder=-2, alpha=0.8)
 
-    for j in range(len(Qs_H)):
-        ax.plot(orders, Qs_H[j+1], "o-", label=f"d={d_shuffles[j]} shuffled")
+    for j in range(len(Qs_H) - 1):
+        ax.plot(orders, Qs_H[j + 1], "o-", label=f"d={d_shuffles[j]} shuffled")
 
         ax.axvline(d_shuffles[j], ls="--", c=f"C{j+1}", zorder=-2, alpha=0.8)
 
     ax.set_xlabel("Max order")
-    #ax.set_xticks(orders)
+    # ax.set_xticks(orders)
 
     ax.set_ylabel("Quality function")
     ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
-    #ax.set_xlim([0, 20])
+    # ax.set_xlim([0, 20])
 
     sb.despine()
 
     fig.suptitle(f"{dataset} $p_s={p_shuffle}$")
 
-    fig_name = f"shuffled_{dataset}_p_s_{p_shuffle}" #lambda2_HG_SC_N_{N}_ps_{ps}_nrep_{n_repetitions}"
+    fig_name = f"shuffled_{dataset}_p_s_{p_shuffle}"  # lambda2_HG_SC_N_{N}_ps_{ps}_nrep_{n_repetitions}"
 
     if save:
         plt.savefig(f"{out_dir}{fig_name}.png", dpi=250, bbox_inches="tight")
@@ -92,6 +93,8 @@ if __name__ == "__main__":
     else:
         datasets = args.name
 
+    rescale_per_node = False
+
     print("Analysing the following datasets:")
     print(datasets)
 
@@ -101,8 +104,11 @@ if __name__ == "__main__":
         print(f"== {i+1}/{len(datasets)} {dataset}...")
         print("========")
 
+        d_shuffles = [3, 5, 7]  # orders to shuffle
+        p_shuffle = 1  # probability of shuffling
+
         # compute only if not computed yet
-        tag = f"message_length_{dataset}"
+        tag = f"shuffled_{dataset}_ds_{d_shuffles}"
         file_name = f"{out_dir}{tag}.npz"
         if os.path.isfile(file_name):
             print(f"Dataset {dataset} was already computed and saved at {file_name}.")
@@ -130,15 +136,12 @@ if __name__ == "__main__":
         tau_c = find_charact_tau(H0, orders, weights)
 
         # compute shuffled hypergraphs
-        d_shuffles = [3, 5, 7] # orders to shuffle
-        p_shuffle = 1 # probability of shuffling
-
         Hs = []
 
         # create copies of the hypergraph with edges shuffled
         for d_shuffle in d_shuffles:
             if d_shuffle <= xgi.max_edge_order(H0):
-                print(d_shuffle)
+                print(f"shuffling order {d_shuffle}")
                 Hs.append(shuffle_hyperedges(S=H0, order=d_shuffle, p=p_shuffle))
 
         # compute message length
@@ -149,10 +152,12 @@ if __name__ == "__main__":
         Qs_H = []
 
         for H in tqdm([H0] + Hs):
-            
-            Ds_H_i, lZs_H_i, orders = compute_information(H, tau_c, rescale_per_node=rescale_per_node)
+
+            Ds_H_i, lZs_H_i, orders = compute_information(
+                H, tau_c, rescale_per_node=rescale_per_node
+            )
             Q_i = Ds_H_i + lZs_H_i
-            
+
             Ds_H.append(Ds_H_i)
             lZs_H.append(lZs_H_i)
             Qs_H.append(Q_i)
@@ -169,5 +174,9 @@ if __name__ == "__main__":
             d_shuffles=d_shuffles,
             orders=orders,
             p_shuffle=p_shuffle,
-            tau_c=tau_c
+            tau_c=tau_c,
+            rescale_per_node=rescale_per_node,
         )
+
+    shutil.copy2(__file__, out_dir)
+    print("script copied, results saved, done")

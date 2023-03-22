@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import sys
 
 import numpy as np
@@ -93,6 +94,8 @@ if __name__ == "__main__":
     else:
         datasets = args.name
 
+    rescale_per_node = False
+
     print("Analysing the following datasets:")
     print(datasets)
 
@@ -132,11 +135,24 @@ if __name__ == "__main__":
 
         # compute message length
         print("Computing message length...")
-        Ds_H, lZs_H, orders = compute_information(H0, tau_c)
+        Ds_H, lZs_H, orders = compute_information(
+            H0, tau_c, rescale_per_node=rescale_per_node
+        )
         Q = Ds_H + lZs_H
 
         # plot results
         plot_message_length_3panels(orders, Ds_H, lZs_H, Q, dataset, save=True)
 
         # save results
-        np.savez(f"{out_dir}{tag}.npz", Q=Q, Ds_H=Ds_H, lZs_H=lZs_H, orders=orders, tau_c=tau_c)
+        np.savez(
+            f"{out_dir}{tag}.npz",
+            Q=Q,
+            Ds_H=Ds_H,
+            lZs_H=lZs_H,
+            orders=orders,
+            tau_c=tau_c,
+            rescale_per_node=rescale_per_node,
+        )
+
+    shutil.copy2(__file__, out_dir)
+    print("script copied, results saved, done")
