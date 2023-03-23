@@ -8,8 +8,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
 import seaborn as sb
+import scipy.sparse as sp
 from numpy.linalg import eigvals, eigvalsh
 from scipy.linalg import expm, logm
+from scipy.sparse.linalg import eigsh
 
 import xgi
 
@@ -28,7 +30,7 @@ __all__ = [
 ]
 
 
-def find_charact_tau(H, orders, weights, rescale_per_node=False):
+def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse=False):
     """
     Find characteristic timescale tau
 
@@ -47,11 +49,15 @@ def find_charact_tau(H, orders, weights, rescale_per_node=False):
         The value of tau calculated from the eigenvalues of the multi-order laplacian matrix.
     """
     L_multi = xgi.multiorder_laplacian(
-        H, orders, weights, rescale_per_node=rescale_per_node
+        H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse
     )
-    Ls = eigvalsh(L_multi)
 
-    return 1 / Ls[-1]
+    if sparse:
+        lambdas = eigsh(L_multi, k=1, return_eigenvectors=False)
+    else:
+        lambdas = eigvalsh(L_multi)
+
+    return 1 / lambdas[-1]
 
 
 def construct_hg_multilayer(H, rescale_per_node=False):
@@ -80,7 +86,7 @@ def construct_hg_multilayer(H, rescale_per_node=False):
     return hg_m, hg_all
 
 
-def density(Lap, tau):
+def density(Lap, tau, sparse=False):
     """
     Computes the density matrix for a Laplacian with scale `tau`.
 
@@ -95,8 +101,14 @@ def density(Lap, tau):
     -------
     np.ndarray: the density matrix
     """
-    rho = expm(-tau * Lap)
-    rho = rho / np.trace(rho) + np.eye(len(rho)) * 10**-10
+    if sparse:
+        rho = sp.linalg.expm(-tau * Lap)
+        rho = rho / rho.trace()
+        rho = rho + sp.eye(rho.shape[0]) * 10**-10
+    else:
+        rho = expm(-tau * Lap)
+        rho = rho / np.trace(rho) 
+        rho = rho + np.eye(len(rho)) * 10**-10
     return rho
 
 
@@ -118,7 +130,7 @@ def partition(Lap, tau):
     return np.trace(expm(-2 * tau * Lap))
 
 
-def KL(rho_emp, rho_model):
+def KL(rho_emp, rho_model, sparse=False):
     """
     Computes the Kullback-Leibler (KL) divergence between an empirical observation `rho_emp` and a model `rho_model`.
 
@@ -133,13 +145,15 @@ def KL(rho_emp, rho_model):
     -------
     float: the KL divergence between `rho_emp` and `rho_model`
     """
-    return np.trace(
-        np.matmul(rho_emp, logm(rho_emp))
-        - np.matmul(rho_emp, logm(rho_model))
-    )
+
+    if sparse:
+        rho_emp = rho_emp.toarray()
+        rho_model = rho_model.toarray()
+    
+    return np.trace(rho_emp @ logm(rho_emp) - rho_emp @ logm(rho_model))
 
 
-def penalization(Lap, tau):
+def penalization(Lap, tau, sparse=False):
     """
     Computes the partition function of a Laplacian with scale `tau`.
 
@@ -154,12 +168,11 @@ def penalization(Lap, tau):
     -------
     float: the partition function
     """
-    Z = np.trace(expm(-tau * Lap))
-    N = len(Lap)
-    return np.log(N) - entropy(Lap, tau)
+    N = Lap.shape[0]
+    return np.log(N) - entropy(Lap, tau, sparse=sparse)
 
 
-def optimization(H, tau, rescale_per_node=False):
+def optimization(H, tau, rescale_per_node=False, sparse=False):
     """
     Computes the gain and loss for modeling a hypergraph (up to order `d_max`),
     using a part of it, up to order `d < d_max`.
@@ -181,10 +194,10 @@ def optimization(H, tau, rescale_per_node=False):
     orders = np.array(xgi.unique_edge_sizes(H)) - 1
     weights = np.ones(len(orders))
     L_multi = xgi.multiorder_laplacian(
-        H, orders, weights, rescale_per_node=rescale_per_node
+        H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse
     )
 
-    rho_all = density(L_multi, tau)
+    rho_all = density(L_multi, tau, sparse=sparse)
 
     D = []  # Learning error
     lZ = []  # Penalization term for model complexity
@@ -192,11 +205,11 @@ def optimization(H, tau, rescale_per_node=False):
 
     for l in range(len(orders)):
         L_l = xgi.multiorder_laplacian(
-            H, orders[0 : l + 1], weights[0 : l + 1], rescale_per_node=rescale_per_node
+            H, orders[0 : l + 1], weights[0 : l + 1], rescale_per_node=rescale_per_node, sparse=sparse
         )
-        rho_l = density(L_l, tau)
-        d = KL(rho_all, rho_l)
-        z = penalization(L_l, tau)
+        rho_l = density(L_l, tau, sparse=sparse)
+        d = KL(rho_all, rho_l, sparse=sparse)
+        z = penalization(L_l, tau, sparse=sparse)
 
         D.append(d)
         lZ.append(z)
@@ -207,7 +220,7 @@ def optimization(H, tau, rescale_per_node=False):
     return D, lZ
 
 
-def entropy(L, tau):
+def entropy(L, tau, sparse=False):
     """
     Computes the entropy associated to the Laplacian matrix.
 
@@ -223,15 +236,22 @@ def entropy(L, tau):
     S: float
         The entropy of the graph
     """
-    Ls = eigvalsh(L)  # Calculate eigenvalues of L
-    Z = np.sum(np.exp(-tau * Ls))  # Calculates the partition function
-    p = np.exp(-tau * Ls) / Z  # Calculates the probabilities
+
+    N = L.shape[0]
+
+    if sparse:
+        lambdas, _ = eigsh(L, k=N-1)
+    else:
+        lambdas = eigvalsh(L)  # Calculate eigenvalues of L
+
+    Z = np.sum(np.exp(-tau * lambdas))  # Calculates the partition function
+    p = np.exp(-tau * lambdas) / Z  # Calculates the probabilities
     p = np.delete(p, np.where(p < 10**-8))
     S = np.sum(-p * np.log(p))  # entropy
     return S
 
 
-def compute_information(H, tau, rescale_per_node=False):
+def compute_information(H, tau, rescale_per_node=False, sparse=False):
     """
     Utility function to compute the information of the hypergraph.
 
@@ -257,7 +277,7 @@ def compute_information(H, tau, rescale_per_node=False):
     Ds = np.zeros(d_max)
     lZs = np.zeros(d_max)
 
-    Ds, lZs = optimization(H, tau, rescale_per_node=rescale_per_node)
+    Ds, lZs = optimization(H, tau, rescale_per_node=rescale_per_node, sparse=sparse)
 
     return Ds, lZs, orders
 
