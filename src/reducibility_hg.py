@@ -23,6 +23,7 @@ __all__ = [
     "KL",
     "penalization",
     "optimization",
+    "optimization_v2",
     "entropy",
     "compute_information",
     "plot_information",
@@ -220,6 +221,80 @@ def optimization(H, tau, rescale_per_node=False, sparse=False):
     return D, lZ
 
 
+def optimization_v2(H, tau, rescale_per_node=False, sparse=False):
+    """
+    Computes the gain and loss for modeling a hypergraph (up to order `d_max`),
+    using a part of it, up to order `d < d_max`.
+
+    Parameters
+    ----------
+    H: xgi Hypergraph
+        The input hypergraph
+    tau: float
+        The scale of signal propagation
+
+    Returns
+    -------
+    D: numpy.ndarray
+        The learning error
+    lZ: numpy.ndarray
+        The penalization term for model complexity
+    """
+    orders = np.array(xgi.unique_edge_sizes(H)) - 1
+    weights = np.ones(len(orders))
+    L_multi = xgi.multiorder_laplacian(
+        H, orders, weights, rescale_per_node=rescale_per_node, sparse=True
+    )
+
+    #rho_all = density(L_multi, tau, sparse=sparse
+    eigenvals, eigenvectors = np.linalg.eigh(L_multi.toarray())
+    # Compute the matrix exponential using the eigendecomposition
+    exp_vals_multi = np.exp(- tau * eigenvals)
+    exp_Lmulti = np.dot(eigenvectors, np.dot(np.diag(exp_vals_multi), eigenvectors.T))
+    rho_all = exp_Lmulti / np.trace(exp_Lmulti) 
+    rho_all = rho_all + np.eye(len(rho_all)) * 10**-10
+
+    D = []  # Learning error
+    lZ = []  # Penalization term for model complexity
+    N = H.num_nodes
+
+    for l in range(len(orders)):
+        L_l = xgi.multiorder_laplacian(
+            H, orders[0 : l + 1], weights[0 : l + 1], rescale_per_node=rescale_per_node, sparse=True
+        )
+
+        #rho_l = density(L_l, tau, sparse=sparse)
+        eigenvals, eigenvectors = np.linalg.eigh(L_l.toarray())
+        # Compute the matrix exponential using the eigendecomposition
+        exp_vals_l = np.exp(- tau * eigenvals)
+        exp_L = np.dot(eigenvectors, np.dot(np.diag(exp_vals_l), eigenvectors.T))
+        rho_l = exp_L / np.trace(exp_L) 
+        rho_l = rho_l + np.eye(len(rho_l)) * 10**-10
+
+        #d = KL(rho_all, rho_l, sparse=sparse)
+        d = np.trace(rho_all @ logm(rho_all) - rho_all @ logm(rho_l))
+
+        # entropy
+        #expL = np.exp(-tau * lambdas)
+        Z = np.sum(exp_vals_l)  # Calculates the partition function
+        p = exp_vals_l / Z  # Calculates the probabilities
+        p = np.delete(p, np.where(p < 10**-8))
+        S = np.sum(-p * np.log(p))  # entropy
+
+        #z = np.log(N) - entropy(L_l, tau, sparse=sparse)
+        #z = penalization(L_l, tau, sparse=sparse)
+        N = L_l.shape[0]
+        z = np.log(N) - S
+
+        D.append(d)
+        lZ.append(z)
+
+    lZ = np.array(lZ)
+    D = np.array(D)
+
+    return D, lZ
+
+
 def entropy(L, tau, sparse=False):
     """
     Computes the entropy associated to the Laplacian matrix.
@@ -244,8 +319,9 @@ def entropy(L, tau, sparse=False):
     else:
         lambdas = eigvalsh(L)  # Calculate eigenvalues of L
 
-    Z = np.sum(np.exp(-tau * lambdas))  # Calculates the partition function
-    p = np.exp(-tau * lambdas) / Z  # Calculates the probabilities
+    expL = np.exp(-tau * lambdas)
+    Z = np.sum(expL)  # Calculates the partition function
+    p = expL / Z  # Calculates the probabilities
     p = np.delete(p, np.where(p < 10**-8))
     S = np.sum(-p * np.log(p))  # entropy
     return S
@@ -332,15 +408,15 @@ def shuffle_hyperedges(S, order, p):
     Parameters
     ----------
     S: xgi.HyperGraph
-            Hypergraph
+        Hypergraph
     order: int
-            Order of hyperedges to shuffle
+        Order of hyperedges to shuffle
     p: float
-            Probability of shuffling each hyperedge
+        Probability of shuffling each hyperedge
     Returns
     -------
     H: xgi.HyperGraph
-            Hypergraph with edges of order d shuffled
+        Hypergraph with edges of order d shuffled
     """
 
     nodes = S.nodes
@@ -359,5 +435,6 @@ def shuffle_hyperedges(S, order, p):
     assert H.num_nodes == S.num_nodes
     assert xgi.num_edges_order(H, 1) == xgi.num_edges_order(S, 1)
     assert xgi.num_edges_order(H, 2) == xgi.num_edges_order(S, 2)
+    assert xgi.num_edges_order(H, order) == xgi.num_edges_order(S, order)
 
     return H

@@ -95,6 +95,7 @@ if __name__ == "__main__":
         datasets = args.name
 
     rescale_per_node = False
+    sparse = True
 
     print("Analysing the following datasets:")
     print(datasets)
@@ -131,12 +132,12 @@ if __name__ == "__main__":
 
         # compute characteristic timescale
         print("Computing characteristic tau...")
-        tau_c = find_charact_tau(H0, orders, weights)
+        tau_c = find_charact_tau(H0, orders, weights, sparse=sparse)
 
         # compute message length
         print("Computing message length...")
         Ds_H, lZs_H, orders = compute_information(
-            H0, tau_c, rescale_per_node=rescale_per_node
+            H0, tau_c, rescale_per_node=rescale_per_node, sparse=sparse
         )
         Q = Ds_H + lZs_H
 
