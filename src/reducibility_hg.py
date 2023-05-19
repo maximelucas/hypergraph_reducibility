@@ -420,7 +420,7 @@ def shuffle_hyperedges(S, order, p):
     """
 
     nodes = S.nodes
-    H = xgi.Hypergraph(S)
+    H = xgi.Hypergraph(S.edges.members(dtype=dict))
 
     d_hyperedges = H.edges.filterby("order", order).members(dtype=dict)
 
