@@ -26,6 +26,7 @@ __all__ = [
     "optimization_v2",
     "entropy",
     "compute_information",
+    "pad_arr_list",
     "plot_information",
     "shuffle_hyperedges",
 ]
@@ -173,7 +174,7 @@ def penalization(Lap, tau, sparse=False):
     return np.log(N) - entropy(Lap, tau, sparse=sparse)
 
 
-def optimization(H, tau, rescale_per_node=False, sparse=False):
+def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=False):
     """
     Computes the gain and loss for modeling a hypergraph (up to order `d_max`),
     using a part of it, up to order `d < d_max`.
@@ -184,6 +185,8 @@ def optimization(H, tau, rescale_per_node=False, sparse=False):
         The input hypergraph
     tau: float
         The scale of signal propagation
+    rescaling_factors : array of float
+        Factors to rescale to tau for each order
 
     Returns
     -------
@@ -194,6 +197,9 @@ def optimization(H, tau, rescale_per_node=False, sparse=False):
     """
     orders = np.array(xgi.unique_edge_sizes(H)) - 1
     weights = np.ones(len(orders))
+    if rescaling_factors is None:
+        rescale_factors = np.zeros_like(orders)
+
     L_multi = xgi.multiorder_laplacian(
         H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse
     )
@@ -208,9 +214,10 @@ def optimization(H, tau, rescale_per_node=False, sparse=False):
         L_l = xgi.multiorder_laplacian(
             H, orders[0 : l + 1], weights[0 : l + 1], rescale_per_node=rescale_per_node, sparse=sparse
         )
-        rho_l = density(L_l, tau, sparse=sparse)
+
+        rho_l = density(L_l, tau * rescaling_factors[l], sparse=sparse)
         d = KL(rho_all, rho_l, sparse=sparse)
-        z = penalization(L_l, tau, sparse=sparse)
+        z = penalization(L_l, tau * rescaling_factors[l], sparse=sparse)
 
         D.append(d)
         lZ.append(z)
@@ -356,6 +363,45 @@ def compute_information(H, tau, rescale_per_node=False, sparse=False):
     Ds, lZs = optimization(H, tau, rescale_per_node=rescale_per_node, sparse=sparse)
 
     return Ds, lZs, orders
+
+
+def pad_arr_list(arr_list, max_shape=None):
+    """
+    Pad a list of arrays with zeros to have the same shape.
+
+    Parameters
+    ----------
+    arr_list : list of array-like
+        The list of arrays to be padded.
+    max_shape : int, optional
+        The maximum length to pad the arrays to. If not provided (None), the maximum length
+        among the arrays in the list will be used. Defaults to None.
+
+    Returns
+    -------
+    list
+        A list of padded arrays.
+
+    Raises
+    ------
+    None
+
+    Example
+    -------
+    arr_list = [np.array([1, 2, 3]), np.array([4, 5]), np.array([6, 7, 8, 9])]
+    padded_arr_list = pad_arr_list(arr_list)
+    """
+
+    if max_shape is None:
+        max_shape = max([a.shape[0] for a in arr_list])
+
+    # Pad the shorter arrays with zeros
+    padded_arr_list = [
+        np.pad(a, (0, max_shape - a.shape[0]), mode="constant", constant_values=None)
+        for a in arr_list
+    ]
+    return padded_arr_list
+
 
 
 def plot_information(H, taus, axs=None, label=None):
