@@ -198,7 +198,7 @@ def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=
     orders = np.array(xgi.unique_edge_sizes(H)) - 1
     weights = np.ones(len(orders))
     if rescaling_factors is None:
-        rescale_factors = np.zeros_like(orders)
+        rescale_factors = np.ones_like(orders)
 
     L_multi = xgi.multiorder_laplacian(
         H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse
