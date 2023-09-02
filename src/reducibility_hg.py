@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 
-def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse=False):
+def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse=False, idx=-1):
     """
     Find characteristic timescale tau
 
@@ -59,7 +59,7 @@ def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse=False):
     else:
         lambdas = eigvalsh(L_multi)
 
-    return 1 / lambdas[-1]
+    return 1 / lambdas[idx]
 
 
 def construct_hg_multilayer(H, rescale_per_node=False):
