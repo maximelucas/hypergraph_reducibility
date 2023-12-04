@@ -108,9 +108,9 @@ def density(Lap, tau, sparse=False):
         rho = rho / rho.trace()
         rho = rho + sp.eye(rho.shape[0]) * 10**-10
     else:
-        #rho = expm(-tau * Lap)
+        # rho = expm(-tau * Lap)
         rho = symm_posdef_expm(-tau * Lap)
-        rho = rho / np.trace(rho) 
+        rho = rho / np.trace(rho)
         rho = rho + np.eye(len(rho)) * 10**-10
     return rho
 
@@ -136,24 +136,28 @@ def partition(Lap, tau):
 def symm_posdef_expm(matrix):
     """Matrix exponential for symmetric positive semidefinite matrix"""
 
-    eigvals, eigvecs = np.linalg.eigh(matrix)  # Compute eigenvalues and eigenvectors of symmetric matrix
+    eigvals, eigvecs = np.linalg.eigh(
+        matrix
+    )  # Compute eigenvalues and eigenvectors of symmetric matrix
     exp_eigvals = np.exp(eigvals)  # Compute exponential of eigenvalues
-    
+
     # Reconstruct matrix with new eigenvalues
     exp_matrix = eigvecs @ np.diag(exp_eigvals) @ eigvecs.T
-    
+
     return exp_matrix
 
 
 def symm_posdef_logm(matrix):
     """Matrix logarithm for symmetric positive semidefinite matrix"""
 
-    eigvals, eigvecs = np.linalg.eigh(matrix)  # Compute eigenvalues and eigenvectors of symmetric matrix
+    eigvals, eigvecs = np.linalg.eigh(
+        matrix
+    )  # Compute eigenvalues and eigenvectors of symmetric matrix
     log_eigvals = np.log(eigvals)  # Compute logarithm of eigenvalues
-    
+
     # Reconstruct matrix with new eigenvalues
     log_matrix = eigvecs @ np.diag(log_eigvals) @ eigvecs.T
-    
+
     return log_matrix
 
 
@@ -176,13 +180,14 @@ def KL(rho_emp, rho_model, sparse=False):
     if sparse:
         rho_emp = rho_emp.toarray()
         rho_model = rho_model.toarray()
-    
-    #return np.trace(rho_emp @ logm(rho_emp) - rho_emp @ logm(rho_model))
+
+    # return np.trace(rho_emp @ logm(rho_emp) - rho_emp @ logm(rho_model))
     log_emp = symm_posdef_logm(rho_emp)
     log_mod = symm_posdef_logm(rho_model)
     mul1 = np.matmul(rho_emp, log_emp)
     mul2 = np.matmul(rho_emp, log_mod)
     return np.trace(mul1 - mul2)
+
 
 def penalization(Lap, tau, sparse=False):
     """
@@ -241,7 +246,11 @@ def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=
 
     for l in range(len(orders)):
         L_l = xgi.multiorder_laplacian(
-            H, orders[0 : l + 1], weights[0 : l + 1], rescale_per_node=rescale_per_node, sparse=sparse
+            H,
+            orders[0 : l + 1],
+            weights[0 : l + 1],
+            rescale_per_node=rescale_per_node,
+            sparse=sparse,
         )
 
         rho_l = density(L_l, tau * rescaling_factors[l], sparse=sparse)
@@ -257,7 +266,9 @@ def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=
     return D, lZ
 
 
-def optimization_v2(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=False):
+def optimization_v2(
+    H, tau, rescaling_factors=None, rescale_per_node=False, sparse=False
+):
     """
     Computes the gain and loss for modeling a hypergraph (up to order `d_max`),
     using a part of it, up to order `d < d_max`.
@@ -286,12 +297,12 @@ def optimization_v2(H, tau, rescaling_factors=None, rescale_per_node=False, spar
         H, orders, weights, rescale_per_node=rescale_per_node, sparse=True
     )
 
-    #rho_all = density(L_multi, tau, sparse=sparse
+    # rho_all = density(L_multi, tau, sparse=sparse
     eigenvals, eigenvectors = np.linalg.eigh(L_multi.toarray())
     # Compute the matrix exponential using the eigendecomposition
-    exp_vals_multi = np.exp(- tau * eigenvals)
+    exp_vals_multi = np.exp(-tau * eigenvals)
     exp_Lmulti = np.dot(eigenvectors, np.dot(np.diag(exp_vals_multi), eigenvectors.T))
-    rho_all = exp_Lmulti / np.trace(exp_Lmulti) 
+    rho_all = exp_Lmulti / np.trace(exp_Lmulti)
     rho_all = rho_all + np.eye(len(rho_all)) * 10**-10
 
     D = []  # Learning error
@@ -300,29 +311,33 @@ def optimization_v2(H, tau, rescaling_factors=None, rescale_per_node=False, spar
 
     for l in range(len(orders)):
         L_l = xgi.multiorder_laplacian(
-            H, orders[0 : l + 1], weights[0 : l + 1], rescale_per_node=rescale_per_node, sparse=True
+            H,
+            orders[0 : l + 1],
+            weights[0 : l + 1],
+            rescale_per_node=rescale_per_node,
+            sparse=True,
         )
 
-        #rho_l = density(L_l, tau, sparse=sparse)
+        # rho_l = density(L_l, tau, sparse=sparse)
         eigenvals, eigenvectors = np.linalg.eigh(L_l.toarray())
         # Compute the matrix exponential using the eigendecomposition
-        exp_vals_l = np.exp(- tau * rescaling_factors[l] * eigenvals)
+        exp_vals_l = np.exp(-tau * rescaling_factors[l] * eigenvals)
         exp_L = np.dot(eigenvectors, np.dot(np.diag(exp_vals_l), eigenvectors.T))
-        rho_l = exp_L / np.trace(exp_L) 
+        rho_l = exp_L / np.trace(exp_L)
         rho_l = rho_l + np.eye(len(rho_l)) * 10**-10
 
-        #d = KL(rho_all, rho_l, sparse=sparse)
+        # d = KL(rho_all, rho_l, sparse=sparse)
         d = np.trace(rho_all @ logm(rho_all) - rho_all @ logm(rho_l))
 
         # entropy
-        #expL = np.exp(-tau * lambdas)
+        # expL = np.exp(-tau * lambdas)
         Z = np.sum(exp_vals_l)  # Calculates the partition function
         p = exp_vals_l / Z  # Calculates the probabilities
         p = np.delete(p, np.where(p < 10**-8))
         S = np.sum(-p * np.log(p))  # entropy
 
-        #z = np.log(N) - entropy(L_l, tau, sparse=sparse)
-        #z = penalization(L_l, tau, sparse=sparse)
+        # z = np.log(N) - entropy(L_l, tau, sparse=sparse)
+        # z = penalization(L_l, tau, sparse=sparse)
         N = L_l.shape[0]
         z = np.log(N) - S
 
@@ -355,7 +370,9 @@ def entropy(L, tau, sparse=False):
     N = L.shape[0]
 
     if sparse:
-        lambdas, _ = eigsh(L, k=N-1) # this uses all eigenvalues except the last one.. not fully exact
+        lambdas, _ = eigsh(
+            L, k=N - 1
+        )  # this uses all eigenvalues except the last one.. not fully exact
     else:
         lambdas = eigvalsh(L)  # Calculate eigenvalues of L
 
@@ -436,7 +453,6 @@ def pad_arr_list(arr_list, max_shape=None):
     return padded_arr_list
 
 
-
 def plot_information(H, taus, axs=None, label=None):
     """
     Plot information function
@@ -500,7 +516,7 @@ def shuffle_hyperedges(S, order, p):
 
     nodes = S.nodes
     H = xgi.Hypergraph()
-    #H = xgi.Hypergraph(S.edges.members(dtype=dict))
+    # H = xgi.Hypergraph(S.edges.members(dtype=dict))
     H.add_nodes_from(nodes)
     H.add_edges_from(S.edges.members(dtype=dict))
 
