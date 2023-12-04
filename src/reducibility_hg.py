@@ -11,126 +11,24 @@ import seaborn as sb
 import scipy.sparse as sp
 from numpy.linalg import eigvals, eigvalsh
 from scipy.linalg import expm, logm
-from scipy.sparse.linalg import eigsh
+#from scipy.sparse.linalg import eigsh
 
 import xgi
 
 __all__ = [
     "find_charact_tau",
-    "construct_hg_multilayer",
     "density",
-    "partition",
     "KL",
     "penalization",
+    "entropy",
     "optimization",
     "optimization_v2",
-    "entropy",
     "compute_information",
     "pad_arr_list",
     "plot_information",
     "shuffle_hyperedges",
+    "construct_hg_multilayer",
 ]
-
-
-def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse=False, idx=-1):
-    """
-    Find characteristic timescale tau
-
-    Parameters
-    ----------
-    H : xgi Hypergraph
-        Input hypergraph
-    orders : list
-        List of integers representing the orders of the laplacian matrices.
-    weights : list
-        List of float values representing the weights for each order.
-
-    Returns
-    -------
-    float
-        The value of tau calculated from the eigenvalues of the multi-order laplacian matrix.
-    """
-    L_multi = xgi.multiorder_laplacian(
-        H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse
-    )
-
-    if sparse:
-        lambdas = eigsh(L_multi, k=1, return_eigenvectors=False)
-    else:
-        lambdas = eigvalsh(L_multi)
-
-    return 1 / lambdas[idx]
-
-
-def construct_hg_multilayer(H, rescale_per_node=False):
-    """
-    Computes the list of Laplacians and the total Laplacian matrix of a hypergraph H.
-
-    Parameters
-    ----------
-    H : xgi.Hypergraph
-        The hypergraph to compute the Laplacian of
-
-    Returns
-    -------
-    list: a list of Laplacians, ordered by their order
-    np.ndarray: the total Laplacian matrix
-    """
-    max_d = xgi.max_edge_order(H)
-    hg_m = []
-    for d in range(1, max_d + 1):
-        L = xgi.laplacian(H, d, rescale_per_node=rescale_per_node)
-        hg_m.append(L)
-    N = G.num_nodes
-    hg_all = np.zeros((N, N))
-    for l in range(len(hg_m)):
-        hg_all = hg_all + hg_m[l]
-    return hg_m, hg_all
-
-
-def density(Lap, tau, sparse=False):
-    """
-    Computes the density matrix for a Laplacian with scale `tau`.
-
-    Parameters
-    ----------
-    Lap : np.ndarray
-        The Laplacian matrix
-    tau : float
-        The scale of the Laplacian
-
-    Returns
-    -------
-    np.ndarray: the density matrix
-    """
-    if sparse:
-        rho = sp.linalg.expm(-tau * Lap)
-        rho = rho / rho.trace()
-        rho = rho + sp.eye(rho.shape[0]) * 10**-10
-    else:
-        # rho = expm(-tau * Lap)
-        rho = symm_posdef_expm(-tau * Lap)
-        rho = rho / np.trace(rho)
-        rho = rho + np.eye(len(rho)) * 10**-10
-    return rho
-
-
-def partition(Lap, tau):
-    """
-    Computes the partition function of a Laplacian with scale `tau`.
-
-    Parameters
-    ----------
-    Lap : np.ndarray
-        The Laplacian matrix
-    tau : float
-        The scale of the Laplacian
-
-    Returns
-    -------
-    float: the partition function
-    """
-    return np.trace(expm(-2 * tau * Lap))
 
 
 def symm_posdef_expm(matrix):
@@ -159,6 +57,68 @@ def symm_posdef_logm(matrix):
     log_matrix = eigvecs @ np.diag(log_eigvals) @ eigvecs.T
 
     return log_matrix
+
+
+def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse=False, idx=-1):
+    """
+    Find characteristic timescale tau
+
+    Parameters
+    ----------
+    H : xgi Hypergraph
+        Input hypergraph
+    orders : list
+        List of integers representing the orders of the laplacian matrices.
+    weights : list
+        List of float values representing the weights for each order.
+
+    Returns
+    -------
+    float
+        The value of tau calculated from the eigenvalues of the multi-order laplacian matrix.
+    """
+    L_multi = xgi.multiorder_laplacian(
+        H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse
+    )
+
+    N = len(L_multi)
+
+    if sparse and idx==-1:
+        raise ValueError("Cannot compute the last eigenvalue for sparse matrices.")
+
+    if sparse:
+        lambdas = sp.eigsh(L_multi, k=N-1, return_eigenvectors=False)
+    else:
+        lambdas = eigvalsh(L_multi)
+
+    return 1 / lambdas[idx]
+
+
+def density(Lap, tau, sparse=False):
+    """
+    Computes the density matrix for a Laplacian with scale `tau`.
+
+    Parameters
+    ----------
+    Lap : np.ndarray
+        The Laplacian matrix
+    tau : float
+        The scale of the Laplacian
+
+    Returns
+    -------
+    np.ndarray: the density matrix
+    """
+    if sparse:
+        rho = sp.linalg.expm(-tau * Lap)
+        rho = rho / rho.trace()
+        rho = rho + sp.eye(rho.shape[0]) * 10**-10
+    else:
+        # rho = expm(-tau * Lap)
+        rho = symm_posdef_expm(-tau * Lap)
+        rho = rho / np.trace(rho)
+        rho = rho + np.eye(len(rho)) * 10**-10
+    return rho
 
 
 def KL(rho_emp, rho_model, sparse=False):
@@ -208,7 +168,41 @@ def penalization(Lap, tau, sparse=False):
     return np.log(N) - entropy(Lap, tau, sparse=sparse)
 
 
-def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=False):
+def entropy(L, tau, sparse=False):
+    """
+    Computes the entropy associated to the Laplacian matrix.
+
+    Parameters
+    ----------
+    L: numpy.ndarray
+        The Laplacian matrix
+    tau: float
+        The scale of signal propagation
+
+    Returns
+    -------
+    S: float
+        The entropy of the graph
+    """
+
+    N = L.shape[0]
+
+    if sparse:
+        lambdas, _ = sp.eigsh(
+            L, k=N - 1
+        )  # this uses all eigenvalues except the last one.. not fully exact
+    else:
+        lambdas = eigvalsh(L)  # Calculate eigenvalues of L
+
+    expL = np.exp(-tau * lambdas)
+    Z = np.sum(expL)  # Calculates the partition function
+    p = expL / Z  # Calculates the probabilities
+    p = np.delete(p, np.where(p < 10**-8))
+    S = np.sum(-p * np.log(p))  # entropy
+    return S
+
+
+def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=False, sparse_Lap=True):
     """
     Computes the gain and loss for modeling a hypergraph (up to order `d_max`),
     using a part of it, up to order `d < d_max`.
@@ -235,8 +229,11 @@ def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=
         rescale_factors = np.ones_like(orders)
 
     L_multi = xgi.multiorder_laplacian(
-        H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse
+        H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse_Lap
     )
+
+    if sparse_Lap:
+        L_multi = L_multi.todense()
 
     rho_all = density(L_multi, tau, sparse=sparse)
 
@@ -250,8 +247,11 @@ def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=
             orders[0 : l + 1],
             weights[0 : l + 1],
             rescale_per_node=rescale_per_node,
-            sparse=sparse,
+            sparse=sparse_Lap,
         )
+
+        if sparse_Lap:
+            L_l = L_l.todense()
 
         rho_l = density(L_l, tau * rescaling_factors[l], sparse=sparse)
         d = KL(rho_all, rho_l, sparse=sparse)
@@ -348,40 +348,6 @@ def optimization_v2(
     D = np.array(D)
 
     return D, lZ
-
-
-def entropy(L, tau, sparse=False):
-    """
-    Computes the entropy associated to the Laplacian matrix.
-
-    Parameters
-    ----------
-    L: numpy.ndarray
-        The Laplacian matrix
-    tau: float
-        The scale of signal propagation
-
-    Returns
-    -------
-    S: float
-        The entropy of the graph
-    """
-
-    N = L.shape[0]
-
-    if sparse:
-        lambdas, _ = eigsh(
-            L, k=N - 1
-        )  # this uses all eigenvalues except the last one.. not fully exact
-    else:
-        lambdas = eigvalsh(L)  # Calculate eigenvalues of L
-
-    expL = np.exp(-tau * lambdas)
-    Z = np.sum(expL)  # Calculates the partition function
-    p = expL / Z  # Calculates the probabilities
-    p = np.delete(p, np.where(p < 10**-8))
-    S = np.sum(-p * np.log(p))  # entropy
-    return S
 
 
 def compute_information(H, tau, rescale_per_node=False, sparse=False):
@@ -536,3 +502,29 @@ def shuffle_hyperedges(S, order, p):
     assert xgi.num_edges_order(H, order) == xgi.num_edges_order(S, order)
 
     return H
+
+
+def construct_hg_multilayer(H, rescale_per_node=False):
+    """
+    Computes the list of Laplacians and the total Laplacian matrix of a hypergraph H.
+
+    Parameters
+    ----------
+    H : xgi.Hypergraph
+        The hypergraph to compute the Laplacian of
+
+    Returns
+    -------
+    list: a list of Laplacians, ordered by their order
+    np.ndarray: the total Laplacian matrix
+    """
+    max_d = xgi.max_edge_order(H)
+    hg_m = []
+    for d in range(1, max_d + 1):
+        L = xgi.laplacian(H, d, rescale_per_node=rescale_per_node)
+        hg_m.append(L)
+    N = G.num_nodes
+    hg_all = np.zeros((N, N))
+    for l in range(len(hg_m)):
+        hg_all = hg_all + hg_m[l]
+    return hg_m, hg_all
