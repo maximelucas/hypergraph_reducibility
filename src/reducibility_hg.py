@@ -11,6 +11,7 @@ import seaborn as sb
 import scipy.sparse as sp
 from numpy.linalg import eigvals, eigvalsh
 from scipy.linalg import expm, logm
+from tqdm import tqdm
 #from scipy.sparse.linalg import eigsh
 
 import xgi
@@ -59,7 +60,7 @@ def symm_posdef_logm(matrix):
     return log_matrix
 
 
-def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse=False, idx=-1):
+def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse_Lap=True, idx=-1):
     """
     Find characteristic timescale tau
 
@@ -78,18 +79,21 @@ def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse=False, i
         The value of tau calculated from the eigenvalues of the multi-order laplacian matrix.
     """
     L_multi = xgi.multiorder_laplacian(
-        H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse
+        H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse_Lap
     )
+
+    if sparse_Lap:
+        L_multi = L_multi.todense()
 
     N = len(L_multi)
 
-    if sparse and idx==-1:
-        raise ValueError("Cannot compute the last eigenvalue for sparse matrices.")
+    #if sparse and idx==-1:
+    #    raise ValueError("Cannot compute the last eigenvalue for sparse matrices.")
 
-    if sparse:
-        lambdas = sp.eigsh(L_multi, k=N-1, return_eigenvectors=False)
-    else:
-        lambdas = eigvalsh(L_multi)
+    #if sparse:
+    #    lambdas = sp.eigsh(L_multi, k=N-1, return_eigenvectors=False)
+    #else
+    lambdas = eigvalsh(L_multi)
 
     return 1 / lambdas[idx]
 
@@ -241,7 +245,7 @@ def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=
     lZ = []  # Penalization term for model complexity
     N = H.num_nodes
 
-    for l in range(len(orders)):
+    for l in tqdm(range(len(orders))):
         L_l = xgi.multiorder_laplacian(
             H,
             orders[0 : l + 1],
