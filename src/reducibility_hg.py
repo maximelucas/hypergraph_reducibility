@@ -64,21 +64,32 @@ def symm_posdef_logm(matrix):
 
 def find_charact_tau(H, orders, weights, rescale_per_node=False, rescale_per_order=True, sparse_Lap=True, idx=-1):
     """
-    Find characteristic timescale tau
+    Compute characteristic timescale tau.
+
+    Tau is commputed as 1 / the idx-th eigenvalue of the multiorder Laplacian.
 
     Parameters
     ----------
     H : xgi Hypergraph
         Input hypergraph
     orders : list
-        List of integers representing the orders of the laplacian matrices.
-    weights : list
-        List of float values representing the weights for each order.
-
+        List of integers representing the orders of the laplacian matrices to consider.
+    rescale_per_node : bool, optional
+        Wether to rescale the Laplacian at each order per node
+    rescale_per_order: bool, optional
+        Wether to rescale the Laplacian at each order per order
+    sparse_Lap: bool, optional
+        Wheter to use a sparse version of the Laplacian to speed up computations.
+    idx: int, optional
+        Index of the eigenvalue to use.
     Returns
     -------
     float
         The value of tau calculated from the eigenvalues of the multi-order laplacian matrix.
+
+    See also
+    ---
+    multiorder_laplacian
     """
     L_multi = xgi.multiorder_laplacian(
         H, orders, weights, rescale_per_node=rescale_per_node, rescale_per_order=rescale_per_order, sparse=sparse_Lap
@@ -110,6 +121,8 @@ def density(Lap, tau, sparse=False):
         The Laplacian matrix
     tau : float
         The scale of the Laplacian
+    sparse: bool, optional
+        If True, return sparse matrix. Default: False.
 
     Returns
     -------
@@ -129,18 +142,21 @@ def density(Lap, tau, sparse=False):
 
 def KL(rho_emp, rho_model, sparse=False):
     """
-    Computes the Kullback-Leibler (KL) divergence between an empirical observation `rho_emp` and a model `rho_model`.
+    Computes the Kullback-Leibler (KL) divergence between density matrices.
+
+    The first density matrix is associated with empirical observation `rho_emp` and 
+    the second density matrix is associated with a model `rho_model`.
 
     Parameters
     ----------
     rho_emp : (np.ndarray)
-        The empirical observation
+        Density matrix of empirical observation
     rho_model : np.ndarray
-        The model
+        Density matrix of model 
 
     Returns
     -------
-    float: the KL divergence between `rho_emp` and `rho_model`
+    float : the KL divergence between `rho_emp` and `rho_model`
     """
 
     if sparse:
@@ -165,6 +181,9 @@ def penalization(Lap, tau, sparse=False):
         The Laplacian matrix
     tau : float
         The scale of the Laplacian
+    sparse: bool, optional
+        If True, compute the `entropy` as a sparse matrix for speed. 
+        Default: False.
 
     Returns
     -------
@@ -184,6 +203,9 @@ def entropy(L, tau, sparse=False):
         The Laplacian matrix
     tau: float
         The scale of signal propagation
+    sparse: bool, optional
+        If True, computes N-1 eigenvalues from sparse matrix. 
+        Default: False.
 
     Returns
     -------
