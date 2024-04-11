@@ -7,7 +7,7 @@ import numpy as np
 import seaborn as sb
 import xgi
 
-from reducibility_hg import optimization
+from hypergraph_reducibility import optimization
 
 __all__ = [
     "symm_posdef_expm",
