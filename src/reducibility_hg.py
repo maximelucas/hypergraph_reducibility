@@ -4,17 +4,18 @@ Script for computing and plotting hypergraph information
 
 import random
 
-import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
-import seaborn as sb
+import numpy as np
 import scipy.sparse as sp
+import seaborn as sb
+import xgi
 from numpy.linalg import eigvals, eigvalsh
 from scipy.linalg import expm, logm
 from tqdm import tqdm
-#from scipy.sparse.linalg import eigsh
 
-import xgi
+# from scipy.sparse.linalg import eigsh
+
 
 __all__ = [
     "find_charact_tau",
@@ -62,7 +63,15 @@ def symm_posdef_logm(matrix):
     return log_matrix
 
 
-def find_charact_tau(H, orders, weights, rescale_per_node=False, rescale_per_order=True, sparse_Lap=True, idx=-1):
+def find_charact_tau(
+    H,
+    orders,
+    weights,
+    rescale_per_node=False,
+    rescale_per_order=True,
+    sparse_Lap=True,
+    idx=-1,
+):
     """
     Compute characteristic timescale tau.
 
@@ -92,7 +101,12 @@ def find_charact_tau(H, orders, weights, rescale_per_node=False, rescale_per_ord
     multiorder_laplacian
     """
     L_multi = xgi.multiorder_laplacian(
-        H, orders, weights, rescale_per_node=rescale_per_node, rescale_per_order=rescale_per_order, sparse=sparse_Lap
+        H,
+        orders,
+        weights,
+        rescale_per_node=rescale_per_node,
+        rescale_per_order=rescale_per_order,
+        sparse=sparse_Lap,
     )
 
     if sparse_Lap:
@@ -100,12 +114,12 @@ def find_charact_tau(H, orders, weights, rescale_per_node=False, rescale_per_ord
 
     N = len(L_multi)
 
-    #if sparse and idx==-1:
+    # if sparse and idx==-1:
     #    raise ValueError("Cannot compute the last eigenvalue for sparse matrices.")
 
-    #if sparse:
+    # if sparse:
     #    lambdas = sp.eigsh(L_multi, k=N-1, return_eigenvectors=False)
-    #else
+    # else
     lambdas = eigvalsh(L_multi)
 
     return 1 / lambdas[idx]
@@ -144,7 +158,7 @@ def KL(rho_emp, rho_model, sparse=False):
     """
     Computes the Kullback-Leibler (KL) divergence between density matrices.
 
-    The first density matrix is associated with empirical observation `rho_emp` and 
+    The first density matrix is associated with empirical observation `rho_emp` and
     the second density matrix is associated with a model `rho_model`.
 
     Parameters
@@ -152,7 +166,7 @@ def KL(rho_emp, rho_model, sparse=False):
     rho_emp : (np.ndarray)
         Density matrix of empirical observation
     rho_model : np.ndarray
-        Density matrix of model 
+        Density matrix of model
 
     Returns
     -------
@@ -182,7 +196,7 @@ def penalization(Lap, tau, sparse=False):
     tau : float
         The scale of the Laplacian
     sparse: bool, optional
-        If True, compute the `entropy` as a sparse matrix for speed. 
+        If True, compute the `entropy` as a sparse matrix for speed.
         Default: False.
 
     Returns
@@ -204,7 +218,7 @@ def entropy(L, tau, sparse=False):
     tau: float
         The scale of signal propagation
     sparse: bool, optional
-        If True, computes N-1 eigenvalues from sparse matrix. 
+        If True, computes N-1 eigenvalues from sparse matrix.
         Default: False.
 
     Returns
@@ -230,7 +244,16 @@ def entropy(L, tau, sparse=False):
     return S
 
 
-def optimization(H, tau, rescaling_factors=None, tau_per_order=False, rescale_per_node=False, rescale_per_order=True, sparse=False, sparse_Lap=True):
+def optimization(
+    H,
+    tau,
+    rescaling_factors=None,
+    tau_per_order=False,
+    rescale_per_node=False,
+    rescale_per_order=True,
+    sparse=False,
+    sparse_Lap=True,
+):
     """
     Computes the gain and loss for modeling a hypergraph (up to order `d_max`),
     using a part of it, up to order `d < d_max`.
@@ -258,10 +281,17 @@ def optimization(H, tau, rescaling_factors=None, tau_per_order=False, rescale_pe
         rescaling_factors = np.ones_like(orders)
 
     if tau_per_order and not np.allclose(rescaling_factors, 1):
-        raise UserWarning("Computing `tau_per_order` but the rescaling_factors are not ones.")
+        raise UserWarning(
+            "Computing `tau_per_order` but the rescaling_factors are not ones."
+        )
 
     L_multi = xgi.multiorder_laplacian(
-        H, orders, weights, rescale_per_node=rescale_per_node, rescale_per_order=rescale_per_order, sparse=sparse_Lap
+        H,
+        orders,
+        weights,
+        rescale_per_node=rescale_per_node,
+        rescale_per_order=rescale_per_order,
+        sparse=sparse_Lap,
     )
 
     if sparse_Lap:
