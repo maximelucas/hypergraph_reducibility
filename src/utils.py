@@ -7,12 +7,11 @@ import numpy as np
 import seaborn as sb
 import xgi
 
-from hypergraph_reducibility import optimization
-
 __all__ = [
     "symm_posdef_expm",
     "symm_posdef_logm",
     "pad_arr_list",
+    "generate_geomspace_points",
     "plot_information",
 ]
 
@@ -83,6 +82,66 @@ def pad_arr_list(arr_list, max_shape=None):
     return padded_arr_list
 
 
+import numpy as np
+
+
+def generate_geomspace_points(
+    start_value, end_value, num_points_between, num_points_before_after
+):
+    """
+    Generate an array of points evenly spaced on a logarithmic scale between two specified values.
+
+    Parameters
+    ----------
+    start_value : float
+        The starting value of the range.
+    end_value : float
+        The ending value of the range.
+    num_points_between : int
+        The number of points to generate between start_value and end_value.
+    num_points_before_after : int
+        The total number of points to add before and after the specified range.
+
+    Returns
+    -------
+    numpy.ndarray
+        An array containing points evenly spaced on a logarithmic scale.
+
+    Examples
+    --------
+    >>> generate_geomspace_points(1, 1000, 4, 1)
+    array([   0.1,    1. ,   10. ,  100. , 1000. , 10000. ])
+    """
+
+    # Generate points between start and end values
+    points_between = np.geomspace(start_value, end_value, num=num_points_between)
+
+    # Compute the logarithmic distance between consecutive points
+    log_distance = np.log10(points_between[1]) - np.log10(points_between[0])
+
+    # Split num_points_before_after into points before and after
+    num_points_before = num_points_before_after
+    num_points_after = num_points_before_after
+
+    # Extend the array by adding points before and after
+    points_before = np.geomspace(
+        start_value / (10 ** (num_points_before * log_distance)),
+        start_value,
+        num=num_points_before,
+        endpoint=False,
+    )
+    points_after = np.geomspace(
+        end_value * (10**log_distance),
+        end_value * (10 ** (num_points_after * log_distance)),
+        num=num_points_after,
+    )
+
+    # Concatenate all points
+    final_array = np.concatenate((points_before, points_between, points_after))
+
+    return final_array
+
+
 def plot_information(H, taus, axs=None, label=None):
     """
     Plot information function
@@ -103,6 +162,9 @@ def plot_information(H, taus, axs=None, label=None):
     tuple of matplotlib figure and list of matplotlib axes
         The matplotlib figure and the list of matplotlib axes used to plot the information function
     """
+    # here to avoid circular import
+    from hypergraph_reducibility import optimization
+
     if axs is None:
         fig, axs = plt.subplots(
             1, len(taus), figsize=(2 * len(taus), 2.1), constrained_layout=True
