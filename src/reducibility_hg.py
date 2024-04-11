@@ -18,6 +18,8 @@ import xgi
 
 __all__ = [
     "find_charact_tau",
+    "symm_posdef_expm",
+    "symm_posdef_logm",
     "density",
     "KL",
     "penalization",
@@ -60,7 +62,7 @@ def symm_posdef_logm(matrix):
     return log_matrix
 
 
-def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse_Lap=True, idx=-1):
+def find_charact_tau(H, orders, weights, rescale_per_node=False, rescale_per_order=True, sparse_Lap=True, idx=-1):
     """
     Find characteristic timescale tau
 
@@ -79,7 +81,7 @@ def find_charact_tau(H, orders, weights, rescale_per_node=False, sparse_Lap=True
         The value of tau calculated from the eigenvalues of the multi-order laplacian matrix.
     """
     L_multi = xgi.multiorder_laplacian(
-        H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse_Lap
+        H, orders, weights, rescale_per_node=rescale_per_node, rescale_per_order=rescale_per_order, sparse=sparse_Lap
     )
 
     if sparse_Lap:
@@ -206,7 +208,7 @@ def entropy(L, tau, sparse=False):
     return S
 
 
-def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=False, sparse_Lap=True):
+def optimization(H, tau, rescaling_factors=None, tau_per_order=False, rescale_per_node=False, rescale_per_order=True, sparse=False, sparse_Lap=True):
     """
     Computes the gain and loss for modeling a hypergraph (up to order `d_max`),
     using a part of it, up to order `d < d_max`.
@@ -229,15 +231,23 @@ def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=
     """
     orders = np.array(xgi.unique_edge_sizes(H)) - 1
     weights = np.ones(len(orders))
+
     if rescaling_factors is None:
-        rescale_factors = np.ones_like(orders)
+        rescaling_factors = np.ones_like(orders)
+
+    if tau_per_order and not np.allclose(rescaling_factors, 1):
+        raise UserWarning("Computing `tau_per_order` but the rescaling_factors are not ones.")
 
     L_multi = xgi.multiorder_laplacian(
-        H, orders, weights, rescale_per_node=rescale_per_node, sparse=sparse_Lap
+        H, orders, weights, rescale_per_node=rescale_per_node, rescale_per_order=rescale_per_order, sparse=sparse_Lap
     )
 
     if sparse_Lap:
         L_multi = L_multi.todense()
+
+    if tau_per_order:
+        lambdas = eigvalsh(L_multi)
+        tau = 1 / lambdas[-1]
 
     rho_all = density(L_multi, tau, sparse=sparse)
 
@@ -251,11 +261,16 @@ def optimization(H, tau, rescaling_factors=None, rescale_per_node=False, sparse=
             orders[0 : l + 1],
             weights[0 : l + 1],
             rescale_per_node=rescale_per_node,
+            rescale_per_order=rescale_per_order,
             sparse=sparse_Lap,
         )
 
         if sparse_Lap:
             L_l = L_l.todense()
+
+        if tau_per_order:
+            lambdas = eigvalsh(L_l)
+            tau = 1 / lambdas[-1]
 
         rho_l = density(L_l, tau * rescaling_factors[l], sparse=sparse)
         d = KL(rho_all, rho_l, sparse=sparse)
