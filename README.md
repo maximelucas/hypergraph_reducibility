@@ -2,8 +2,8 @@
 
 This repository contains the code used for the analysis presented in the paper:  
 "Functional reducibility of higher-order networks",  
-by M. Lucas, L. Gallo, A. Ghavasieh, F. Battiston, and M. De Domenico
-
+by M. Lucas, L. Gallo, A. Ghavasieh, F. Battiston, and M. De Domenico  
+[arXiv:2404.08547](https://arxiv.org/abs/2404.08547)  
 
 ### Contents
 - `notebooks/`: notebooks used to produce the figures and simple simulations
